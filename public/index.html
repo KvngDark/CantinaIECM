@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantina - Cliente</title>
+</head>
+<body>
+    <h1>Cantina da Igreja</h1>
+    
+    // Informações do cliente
+    <div>
+        <label>Seu nome: <input type="text" id="customerName" placeholder="Digite seu nome"></label>
+        <label>Mesa: <input type="number" id="tableNumber" placeholder="Número da mesa"></label>
+    </div>
+
+    // Lista de produtos 
+    <h2>Cardápio</h2>
+    <div id="productsList"></div>
+
+    // Carrinho (simples)
+    <div id="cart">
+        <h3>Carrinho</h3>
+        <div id="cartItems"></div>
+        <p>Total: R$ <span id="cartTotal">0</span></p>
+        <button onclick="checkout()">Finalizar Pedido</button>
+    </div>
+
+   // Modal de pagamento
+    <div id="paymentModal" style="display:none; border:2px solid black; padding:20px; margin-top:20px;">
+        <div id="paymentContent"></div>
+        <button onclick="closeModal()">Fechar</button>
+    </div>
+
+    <script>
+        let products = [];
+        let cart = [];
+        let currentStoreId = 1;
+
+        // Carregar produtos do backend
+        async function loadProducts() {
+            try {
+                const res = await fetch(`/api/products/${currentStoreId}`);
+                products = await res.json();
+                renderProducts();
+            } catch (err) {
+                // Fallback para teste sem backend
+                products = [
+                    { id:1, name:"X-Burguer", price:15.90, description:"Hambúrguer artesanal" },
+                    { id:2, name:"Coxinha", price:5.50, description:"Frango com catupiry" },
+                    { id:3, name:"Refrigerante", price:6.00, description:"Lata 350ml" }
+                ];
+                renderProducts();
+            }
+        }
+
+        function renderProducts() {
+            const div = document.getElementById('productsList');
+            div.innerHTML = products.map(p => `
+                <div style="border:1px solid #ccc; margin:10px; padding:10px;">
+                    <strong>${p.name}</strong> - R$ ${p.price.toFixed(2)}
+                    <p>${p.description || ''}</p>
+                    <button onclick="addToCart(${p.id})">Adicionar</button>
+                </div>
+            `).join('');
+        }
+
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            const existing = cart.find(item => item.id === productId);
+            
+            if(existing) {
+                existing.quantity++;
+            } else {
+                cart.push({...product, quantity: 1});
+            }
+            updateCartDisplay();
+        }
+
+        function updateCartDisplay() {
+            const cartDiv = document.getElementById('cartItems');
+            const totalSpan = document.getElementById('cartTotal');
+            
+            if(cart.length === 0) {
+                cartDiv.innerHTML = '<p>Carrinho vazio</p>';
+                totalSpan.innerText = '0';
+                return;
+            }
+            
+            cartDiv.innerHTML = cart.map(item => `
+                <div>
+                    ${item.name} x${item.quantity} = R$ ${(item.price * item.quantity).toFixed(2)}
+                    <button onclick="removeFromCart(${item.id})">Remover</button>
+                </div>
+            `).join('');
+            
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            totalSpan.innerText = total.toFixed(2);
+        }
+
+        function removeFromCart(productId) {
+            const item = cart.find(i => i.id === productId);
+            if(item.quantity > 1) {
+                item.quantity--;
+            } else {
+                cart = cart.filter(i => i.id !== productId);
+            }
+            updateCartDisplay();
+        }
+
+        async function checkout() {
+            const customerName = document.getElementById('customerName').value;
+            if(!customerName) {
+                alert('Digite seu nome!');
+                return;
+            }
+            
+            if(cart.length === 0) {
+                alert('Carrinho vazio!');
+                return;
+            }
+            
+            const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            
+            const modal = document.getElementById('paymentModal');
+            const content = document.getElementById('paymentContent');
+            
+            content.innerHTML = `
+                <h3>Total: R$ ${total.toFixed(2)}</h3>
+                <button onclick="processPayment('pix')">💳 PIX</button>
+                <button onclick="processPayment('cash')">💵 Dinheiro</button>
+            `;
+            modal.style.display = 'block';
+        }
+
+        async function processPayment(method) {
+            const customerName = document.getElementById('customerName').value;
+            const tableNumber = document.getElementById('tableNumber').value;
+            
+            const order = {
+                store_id: currentStoreId,
+                customer_name: customerName,
+                table_number: tableNumber || null,
+                items: cart,
+                total_amount: cart.reduce((sum, i) => sum + (i.price * i.quantity), 0),
+                payment_method: method
+            };
+            
+            try {
+                const res = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(order)
+                });
+                const data = await res.json();
+                
+                const content = document.getElementById('paymentContent');
+                
+                if(method === 'pix') {
+                    content.innerHTML = `
+                        <h3>Pagamento PIX</h3>
+                        <img src="${data.qrCode}" style="max-width:200px">
+                        <p>Código: ${data.pixCode}</p>
+                        <button onclick="copyText('${data.pixCode}')">Copiar Código</button>
+                        <p>Após o pagamento, seu pedido vai para a cozinha</p>
+                    `;
+                } else {
+                    content.innerHTML = `
+                        <h3>Pedido em Dinheiro</h3>
+                        <h2>Código: ${data.orderCode}</h2>
+                        <p>Mostre este código para o atendente e pague em dinheiro</p>
+                    `;
+                }
+                
+                cart = [];
+                updateCartDisplay();
+                
+            } catch(err) {
+                alert('Erro ao fazer pedido. Tente novamente.');
+            }
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text);
+            alert('Código copiado!');
+        }
+
+        function closeModal() {
+            document.getElementById('paymentModal').style.display = 'none';
+        }
+
+        loadProducts();    
+    </script>
+</body>
+</html>
