@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantina - Atendente</title>
+</head>
+<body>
+    <div id="loginScreen">
+        <h2>Login Atendente</h2>
+        <input type="email" id="email" placeholder="Email" value="atendente@igreja.com">
+        <input type="password" id="password" placeholder="Senha" value="123456">
+        <button onclick="login()">Entrar</button>
+    </div>
+
+    <div id="mainScreen" style="display:none">
+        <h1>Painel do Atendente</h1>
+        <button onclick="logout()">Sair</button>
+        
+        <hr>
+        
+        <h3>Confirmar Pagamento em Dinheiro</h3>
+        <input type="text" id="orderCode" placeholder="Digite o código do pedido">
+        <button onclick="confirmPayment()">Confirmar Pagamento</button>
+        
+        <hr>
+        
+        <h3>Pedidos Ativos</h3>
+        <div id="ordersList"></div>
+    </div>
+
+    <script>
+        let token = null;
+        let storeId = null;
+        let refreshInterval = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const res = await fetch('/api/auth/attendant/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                
+                if(res.ok) {
+                    token = data.token;
+                    storeId = data.attendant.store_id;
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('mainScreen').style.display = 'block';
+                    loadOrders();
+                    refreshInterval = setInterval(loadOrders, 10000);
+                } else {
+                    alert('Login falhou. Use: atendente@igreja.com / 123456');
+                }
+            } catch(err) {
+                alert('Erro de conexão. Modo demonstração.');
+                token = 'demo';
+                storeId = 1;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('mainScreen').style.display = 'block';
+                loadMockOrders();
+                refreshInterval = setInterval(loadMockOrders, 10000);
+            }
+        }
+
+        async function loadOrders() {
+            try {
+                const res = await fetch(`/api/orders/store/${storeId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const orders = await res.json();
+                renderOrders(orders);
+            } catch(err) {
+                loadMockOrders();
+            }
+        }
+
+        function loadMockOrders() {
+            const mockOrders = [
+                { order_code: 'ABC123', customer_name: 'João', total_amount: 25.90, status: 'pending', payment_method: 'cash' },
+                { order_code: 'DEF456', customer_name: 'Maria', total_amount: 15.50, status: 'preparing', payment_method: 'pix' }
+            ];
+            renderOrders(mockOrders);
+        }
+
+        function renderOrders(orders) {
+            const div = document.getElementById('ordersList');
+            
+            if(orders.length === 0) {
+                div.innerHTML = '<p>Nenhum pedido ativo</p>';
+                return;
+            }
+            
+            div.innerHTML = orders.map(order => `
+                <div style="border:1px solid #ccc; margin:10px; padding:10px">
+                    <strong>Código: ${order.order_code}</strong><br>
+                    Cliente: ${order.customer_name}<br>
+                    Total: R$ ${order.total_amount}<br>
+                    Status: ${order.status}<br>
+                    Pagamento: ${order.payment_method}<br>
+                    ${order.status === 'pending' && order.payment_method === 'pix' ? '<button onclick="updateStatus(\'' + order.id + '\', \'preparing\')">Iniciar Preparo</button>' : ''}
+                    ${order.status === 'preparing' ? '<button onclick="updateStatus(\'' + order.id + '\', \'ready\')">Pedido Pronto</button>' : ''}
+                    ${order.status === 'ready' ? '<button onclick="updateStatus(\'' + order.id + '\', \'delivered\')">Entregue</button>' : ''}
+                </div>
+            `).join('');
+        }
+
+        async function confirmPayment() {
+            const code = document.getElementById('orderCode').value.toUpperCase();
+            if(!code) {
+                alert('Digite o código do pedido');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/orders/${code}/confirm-payment`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if(res.ok) {
+                    alert('Pagamento confirmado! Pedido enviado para cozinha');
+                    document.getElementById('orderCode').value = '';
+                    loadOrders();
+                } else {
+                    alert('Pedido não encontrado');
+                }
+            } catch(err) {
+                alert('Pagamento confirmado (modo demo)');
+                loadMockOrders();
+            }
+        }
+
+        async function updateStatus(orderId, status) {
+            try {
+                await fetch(`/api/orders/${orderId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status })
+                });
+                loadOrders();
+            } catch(err) {
+                alert(`Status atualizado para ${status}`);
+                loadMockOrders();
+            }
+        }
+
+        function logout() {
+            if(refreshInterval) clearInterval(refreshInterval);
+            token = null;
+            document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('mainScreen').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
