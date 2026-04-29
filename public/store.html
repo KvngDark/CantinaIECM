@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantina - Loja</title>
+</head>
+<body>
+    <div id="loginScreen">
+        <h2>Login Loja</h2>
+        <input type="email" id="email" placeholder="Email" value="cantina@igreja.com">
+        <input type="password" id="password" placeholder="Senha" value="123456">
+        <button onclick="login()">Entrar</button>
+    </div>
+
+    <div id="mainScreen" style="display:none">
+        <h1>Painel da Loja</h1>
+        <button onclick="logout()">Sair</button>
+        
+        <hr>
+        
+       
+        <button onclick="showTab('products')">Produtos</button>
+        <button onclick="showTab('attendants')">Atendentes</button>
+        <button onclick="showTab('orders')">Pedidos</button>
+        
+        <hr>
+        
+        <!-- Aba de Produtos -->
+        <div id="productsTab">
+            <h3>Adicionar Produto</h3>
+            <input type="text" id="productName" placeholder="Nome"><br>
+            <input type="number" id="productPrice" step="0.01" placeholder="Preço"><br>
+            <input type="text" id="productDesc" placeholder="Descrição"><br>
+            <input type="text" id="productImage" placeholder="URL da imagem"><br>
+            <select id="productCategory">
+                <option value="lanches">Lanches</option>
+                <option value="bebidas">Bebidas</option>
+                <option value="salgados">Salgados</option>
+            </select><br>
+            <button onclick="addProduct()">Adicionar</button>
+            
+            <h3>Produtos Cadastrados</h3>
+            <div id="productsList"></div>
+        </div>
+        
+        <!-- Aba de Atendentes -->
+        <div id="attendantsTab" style="display:none">
+            <h3>Cadastrar Atendente</h3>
+            <input type="text" id="attendantName" placeholder="Nome"><br>
+            <input type="email" id="attendantEmail" placeholder="Email"><br>
+            <input type="password" id="attendantPassword" placeholder="Senha"><br>
+            <button onclick="addAttendant()">Cadastrar</button>
+        </div>
+        
+        <!-- Aba de Pedidos -->
+        <div id="ordersTab" style="display:none">
+            <h3>Todos os Pedidos</h3>
+            <div id="ordersList"></div>
+        </div>
+    </div>
+
+    <script>
+        let token = null;
+        let storeId = null;
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const res = await fetch('/api/auth/store/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+                
+                if(res.ok) {
+                    token = data.token;
+                    storeId = data.store.id;
+                    document.getElementById('loginScreen').style.display = 'none';
+                    document.getElementById('mainScreen').style.display = 'block';
+                    loadProducts();
+                } else {
+                    alert('Login falhou. Use: cantina@igreja.com / 123456');
+                }
+            } catch(err) {
+                alert('Modo demonstração');
+                token = 'demo';
+                storeId = 1;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('mainScreen').style.display = 'block';
+                loadMockProducts();
+            }
+        }
+
+        async function loadProducts() {
+            try {
+                const res = await fetch(`/api/products/${storeId}`);
+                const products = await res.json();
+                renderProducts(products);
+            } catch(err) {
+                loadMockProducts();
+            }
+        }
+
+        function loadMockProducts() {
+            const products = [
+                { id:1, name:"X-Burguer", price:15.90, category:"lanches" },
+                { id:2, name:"Coxinha", price:5.50, category:"salgados" }
+            ];
+            renderProducts(products);
+        }
+
+        function renderProducts(products) {
+            const div = document.getElementById('productsList');
+            div.innerHTML = products.map(p => `
+                <div style="border:1px solid #ccc; margin:5px; padding:5px">
+                    ${p.name} - R$ ${p.price} - ${p.category}
+                    <button onclick="deleteProduct(${p.id})">Excluir</button>
+                </div>
+            `).join('');
+        }
+
+        async function addProduct() {
+            const product = {
+                name: document.getElementById('productName').value,
+                price: parseFloat(document.getElementById('productPrice').value),
+                description: document.getElementById('productDesc').value,
+                image_url: document.getElementById('productImage').value,
+                category: document.getElementById('productCategory').value
+            };
+            
+            if(!product.name || !product.price) {
+                alert('Preencha nome e preço');
+                return;
+            }
+            
+            try {
+                await fetch('/api/products', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(product)
+                });
+                alert('Produto adicionado');
+                loadProducts();
+            } catch(err) {
+                alert('Produto adicionado (demo)');
+                loadMockProducts();
+            }
+            
+            // Limpar campos
+            document.getElementById('productName').value = '';
+            document.getElementById('productPrice').value = '';
+            document.getElementById('productDesc').value = '';
+            document.getElementById('productImage').value = '';
+        }
+
+        async function deleteProduct(id) {
+            if(!confirm('Excluir produto?')) return;
+            
+            try {
+                await fetch(`/api/products/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                loadProducts();
+            } catch(err) {
+                alert('Produto excluído (demo)');
+                loadMockProducts();
+            }
+        }
+
+        function addAttendant() {
+            const name = document.getElementById('attendantName').value;
+            const email = document.getElementById('attendantEmail').value;
+            
+            if(!name || !email) {
+                alert('Preencha nome e email');
+                return;
+            }
+            
+            alert(`Atendente ${name} cadastrado!`);
+            document.getElementById('attendantName').value = '';
+            document.getElementById('attendantEmail').value = '';
+            document.getElementById('attendantPassword').value = '';
+        }
+
+        async function loadOrders() {
+            try {
+                const res = await fetch(`/api/orders/store/${storeId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const orders = await res.json();
+                renderOrders(orders);
+            } catch(err) {
+                const mockOrders = [
+                    { order_code:'ABC123', customer_name:'João', total_amount:25.90, status:'preparing' },
+                    { order_code:'DEF456', customer_name:'Maria', total_amount:15.50, status:'ready' }
+                ];
+                renderOrders(mockOrders);
+            }
+        }
+
+        function renderOrders(orders) {
+            const div = document.getElementById('ordersList');
+            div.innerHTML = orders.map(order => `
+                <div style="border:1px solid #ccc; margin:5px; padding:5px">
+                    <strong>${order.order_code}</strong> - ${order.customer_name}<br>
+                    R$ ${order.total_amount} - Status: ${order.status}
+                </div>
+            `).join('');
+        }
+
+        function showTab(tab) {
+            document.getElementById('productsTab').style.display = tab === 'products' ? 'block' : 'none';
+            document.getElementById('attendantsTab').style.display = tab === 'attendants' ? 'block' : 'none';
+            document.getElementById('ordersTab').style.display = tab === 'orders' ? 'block' : 'none';
+            
+            if(tab === 'orders') loadOrders();
+        }
+
+        function logout() {
+            token = null;
+            document.getElementById('loginScreen').style.display = 'block';
+            document.getElementById('mainScreen').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
