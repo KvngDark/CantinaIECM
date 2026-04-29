@@ -8,17 +8,17 @@
 <body>
     <h1>Cantina da Igreja</h1>
     
-    // Informações do cliente
+    <!-- Informações do cliente -->
     <div>
         <label>Seu nome: <input type="text" id="customerName" placeholder="Digite seu nome"></label>
         <label>Mesa: <input type="number" id="tableNumber" placeholder="Número da mesa"></label>
     </div>
 
-    // Lista de produtos 
+    <!-- Lista de produtos -->
     <h2>Cardápio</h2>
     <div id="productsList"></div>
 
-    // Carrinho (simples)
+    <!-- Carrinho  -->
     <div id="cart">
         <h3>Carrinho</h3>
         <div id="cartItems"></div>
@@ -26,7 +26,7 @@
         <button onclick="checkout()">Finalizar Pedido</button>
     </div>
 
-   // Modal de pagamento
+   <!-- Modal do Pagamento -->
     <div id="paymentModal" style="display:none; border:2px solid black; padding:20px; margin-top:20px;">
         <div id="paymentContent"></div>
         <button onclick="closeModal()">Fechar</button>
